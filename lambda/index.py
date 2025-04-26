@@ -32,7 +32,7 @@ def lambda_handler(event, context):
         })
         
         # FastAPIエンドポイントURL - ngrokで公開されたURL
-        api_url = "https://a7f7-34-143-161-18.ngrok-free.app/generate"
+        api_url = "https://0b91-35-233-187-0.ngrok-free.app/generate"
         
         # リクエストデータの準備
         request_data = {
