@@ -1,13 +1,11 @@
-# lambda/index.py ------------------------------------------------------------
+# lambda/index.py
 import json, os, urllib.request, urllib.error, socket, logging
 from http import HTTPStatus               # 便利な定数
 
-# ─── ① FastAPI のベース URL ───
-#    ・CDK で addEnvironment("FASTAPI_URL", "https://xxxx.ngrok-free.app")
-#    ・毎回 ngrok を張り直したら ここ or 環境変数 を必ず更新！
+
 FASTAPI_BASE = os.environ.get("FASTAPI_URL", "https://0377-35-233-187-0.ngrok-free.app").rstrip("/")
 
-# ─── ② FastAPI 呼び出し関数 ───
+# FastAPI 呼び出し関数
 def call_fastapi(prompt: str, timeout: int = 45) -> str:
     """/generate へ JSON を POST し generated_text を返す"""
     payload = json.dumps({
@@ -37,7 +35,7 @@ def call_fastapi(prompt: str, timeout: int = 45) -> str:
         logging.error("FastAPI network error: %s", e)
         raise
 
-# ─── ③ Lambda ハンドラー ───
+# Lambda ハンドラー
 def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body", "{}"))
@@ -81,4 +79,4 @@ def lambda_handler(event, context):
             },
             "body": json.dumps({"success": False, "error": str(exc)})
         }
-# ---------------------------------------------------------------------------
+
