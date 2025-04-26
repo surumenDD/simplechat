@@ -5,7 +5,7 @@ import urllib.request
 import logging
 
 
-FASTAPI_URL = "https://239b-35-233-187-0.ngrok-free.app"
+FASTAPI_URL = "https://0b49-35-233-187-0.ngrok-free.app"
 
 
 def call_fastapi(message: str, timeout: int = 30) -> str:
@@ -13,7 +13,7 @@ def call_fastapi(message: str, timeout: int = 30) -> str:
         raise RuntimeError("FASTAPI_URL が設定されていません")
 
     req = urllib.request.Request(
-        url=f"{FASTAPI_URL}/chat",                         # エンドポイント
+        url=f"{FASTAPI_URL}",                         # エンドポイント
         data=json.dumps({"message": message}).encode(),    # JSON ボディ
         headers={"Content-Type": "application/json"},
         method="POST"
