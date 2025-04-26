@@ -1,51 +1,48 @@
 # lambda/index.py
-import json
-import os
-import urllib.request
-import logging
+import json, os, urllib.request, urllib.error, socket, logging
 
 
-FASTAPI_URL = "https://0b49-35-233-187-0.ngrok-free.app"
+FASTAPI_BASE = os.environ.get(
+    "FASTAPI_URL",                # 環境変数がなければ直書き URL を fallback
+    "https://a45c-35-233-187-0.ngrok-free.app"
+).rstrip("/")
 
-
-def call_fastapi(message: str, timeout: int = 30) -> str:
-    if not FASTAPI_URL:
-        raise RuntimeError("FASTAPI_URL が設定されていません")
-
+def call_fastapi(message: str, timeout: int = 45) -> str:
+    """FastAPI の /generate エンドポイントに JSON を POST して応答文字列を返す"""
+    body = json.dumps({"message": message}).encode()
     req = urllib.request.Request(
-        url=f"{FASTAPI_URL}",                         # エンドポイント
-        data=json.dumps({"message": message}).encode(),    # JSON ボディ
+        url=f"{FASTAPI_BASE}/generate",          # ★ FastAPI 側と同じパスに合わせる
+        data=body,
         headers={"Content-Type": "application/json"},
         method="POST"
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read())
-        return data.get("response", "")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())["response"]
+    except urllib.error.HTTPError as e:
+        # 4xx/5xx はここに来る（405, 404, 500 など）
+        logging.error("FastAPI HTTPError %s %s", e.code, e.reason)
+        raise
+    except (urllib.error.URLError, socket.timeout) as e:
+        logging.error("FastAPI connection error: %s", e)
+        raise
 
-
-# Lambda ハンドラー
 def lambda_handler(event, context):
     try:
-        logging.info("Received event: %s", json.dumps(event))
-
-        # ----------- リクエスト解析 -----------
         body = json.loads(event.get("body", "{}"))
         message = body.get("message", "")
-        conversation_history = body.get("conversationHistory", [])
+        history = body.get("conversationHistory", [])
 
         if not message:
             raise ValueError("message が空です")
 
-        # ----------- FastAPI 呼び出し -----------
-        assistant_response = call_fastapi(message)
+        assistant_resp = call_fastapi(message)
 
-        # ----------- 会話履歴更新 -----------
-        conversation_history.extend([
+        history.extend([
             {"role": "user",      "content": message},
-            {"role": "assistant", "content": assistant_response}
+            {"role": "assistant", "content": assistant_resp}
         ])
 
-        # ----------- 正常レスポンス -----------
         return {
             "statusCode": 200,
             "headers": {
@@ -56,15 +53,13 @@ def lambda_handler(event, context):
             },
             "body": json.dumps({
                 "success": True,
-                "response": assistant_response,
-                "conversationHistory": conversation_history
+                "response": assistant_resp,
+                "conversationHistory": history
             })
         }
 
     except Exception as e:
         logging.exception("Error during processing")
-
-        # ----------- エラー応答 -----------
         return {
             "statusCode": 500,
             "headers": {
@@ -73,8 +68,5 @@ def lambda_handler(event, context):
                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                 "Access-Control-Allow-Methods": "OPTIONS,POST"
             },
-            "body": json.dumps({
-                "success": False,
-                "error": str(e)
-            })
+            "body": json.dumps({"success": False, "error": str(e)})
         }
