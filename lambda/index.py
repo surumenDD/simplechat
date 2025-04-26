@@ -8,8 +8,13 @@ FASTAPI_BASE = os.environ.get(
 ).rstrip("/")
 
 def call_fastapi(message: str, timeout: int = 45) -> str:
-    """FastAPI の /generate エンドポイントに JSON を POST して応答文字列を返す"""
-    body = json.dumps({"message": message}).encode()
+    body = json.dumps({
+        "prompt": message,        
+        "max_new_tokens": 512,
+        "do_sample": True,
+        "temperature": 0.7,
+        "top_p": 0.9
+    }).encode()
     req = urllib.request.Request(
         url=f"{FASTAPI_BASE}/generate",          # ★ FastAPI 側と同じパスに合わせる
         data=body,
