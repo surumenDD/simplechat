@@ -1,37 +1,43 @@
-# lambda/index.py
+# lambda/index.py ------------------------------------------------------------
 import json, os, urllib.request, urllib.error, socket, logging
+from http import HTTPStatus               # 便利な定数
 
+# ─── ① FastAPI のベース URL ───
+#    ・CDK で addEnvironment("FASTAPI_URL", "https://xxxx.ngrok-free.app")
+#    ・毎回 ngrok を張り直したら ここ or 環境変数 を必ず更新！
+FASTAPI_BASE = os.environ.get("FASTAPI_URL", "https://0377-35-233-187-0.ngrok-free.app").rstrip("/")
 
-FASTAPI_BASE = os.environ.get(
-    "FASTAPI_URL",                # 環境変数がなければ直書き URL を fallback
-    "https://0377-35-233-187-0.ngrok-free.app"
-).rstrip("/")
-
-def call_fastapi(message: str, timeout: int = 45) -> str:
-    body = json.dumps({
-        "prompt": message,        
+# ─── ② FastAPI 呼び出し関数 ───
+def call_fastapi(prompt: str, timeout: int = 45) -> str:
+    """/generate へ JSON を POST し generated_text を返す"""
+    payload = json.dumps({
+        "prompt": prompt,
         "max_new_tokens": 512,
         "do_sample": True,
         "temperature": 0.7,
         "top_p": 0.9
     }).encode()
+
     req = urllib.request.Request(
-        url=f"{FASTAPI_BASE}/generate",          # ★ FastAPI 側と同じパスに合わせる
-        data=body,
+        url=f"{FASTAPI_BASE}/generate",
+        data=payload,
         headers={"Content-Type": "application/json"},
         method="POST"
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read())["response"]
+            body = json.loads(resp.read())
+            return body["generated_text"]          # ← FastAPI 側のキー名
     except urllib.error.HTTPError as e:
-        # 4xx/5xx はここに来る（405, 404, 500 など）
+        # FastAPI が 4xx/5xx を返したとき
         logging.error("FastAPI HTTPError %s %s", e.code, e.reason)
         raise
     except (urllib.error.URLError, socket.timeout) as e:
-        logging.error("FastAPI connection error: %s", e)
+        # ネットワーク到達不可 or タイムアウト
+        logging.error("FastAPI network error: %s", e)
         raise
 
+# ─── ③ Lambda ハンドラー ───
 def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body", "{}"))
@@ -41,15 +47,15 @@ def lambda_handler(event, context):
         if not message:
             raise ValueError("message が空です")
 
-        assistant_resp = call_fastapi(message)
+        answer = call_fastapi(message)
 
-        history.extend([
+        history += [
             {"role": "user",      "content": message},
-            {"role": "assistant", "content": assistant_resp}
-        ])
+            {"role": "assistant", "content": answer}
+        ]
 
         return {
-            "statusCode": 200,
+            "statusCode": HTTPStatus.OK,
             "headers": {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
@@ -58,20 +64,21 @@ def lambda_handler(event, context):
             },
             "body": json.dumps({
                 "success": True,
-                "response": assistant_resp,
+                "response": answer,
                 "conversationHistory": history
             })
         }
 
-    except Exception as e:
-        logging.exception("Error during processing")
+    except Exception as exc:
+        logging.exception("Lambda error")
         return {
-            "statusCode": 500,
+            "statusCode": HTTPStatus.INTERNAL_SERVER_ERROR,
             "headers": {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
                 "Access-Control-Allow-Methods": "OPTIONS,POST"
             },
-            "body": json.dumps({"success": False, "error": str(e)})
+            "body": json.dumps({"success": False, "error": str(exc)})
         }
+# ---------------------------------------------------------------------------
