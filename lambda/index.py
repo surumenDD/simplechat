@@ -4,7 +4,7 @@ import json, os, urllib.request, urllib.error, socket, logging
 
 FASTAPI_BASE = os.environ.get(
     "FASTAPI_URL",                # 環境変数がなければ直書き URL を fallback
-    "https://a45c-35-233-187-0.ngrok-free.app"
+    "https://22d2-35-233-187-0.ngrok-free.app"
 ).rstrip("/")
 
 def call_fastapi(message: str, timeout: int = 45) -> str:
